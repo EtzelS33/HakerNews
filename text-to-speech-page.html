@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to Speech Reader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            max-width: 800px;
+            width: 100%;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 300;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .textarea-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        #textInput {
+            width: 100%;
+            min-height: 300px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            font-size: 16px;
+            line-height: 1.6;
+            resize: vertical;
+            outline: none;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            background: #fafafa;
+        }
+
+        #textInput:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.2);
+            background: white;
+        }
+
+        #textInput::placeholder {
+            color: #999;
+            font-style: italic;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 120px;
+            justify-content: center;
+        }
+
+        #speakBtn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        #speakBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        #speakBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #stopBtn {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        #stopBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(255, 107, 107, 0.4);
+        }
+
+        #clearBtn {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            box-shadow: 0 8px 20px rgba(116, 185, 255, 0.3);
+        }
+
+        #clearBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(116, 185, 255, 0.4);
+        }
+
+        .settings {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 15px;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .setting-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        select, input[type="range"] {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        select:focus, input[type="range"]:focus {
+            border-color: #667eea;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .status.speaking {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .status.ready {
+            background: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+        }
+
+        .word-count {
+            text-align: right;
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .settings {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔊 Text to Speech Reader</h1>
+        
+        <div class="textarea-container">
+            <textarea 
+                id="textInput" 
+                placeholder="Incolla qui il testo che vuoi far leggere ad alta voce...&#10;&#10;Supporta testo in italiano, inglese e altre lingue.&#10;Usa i controlli sottostanti per personalizzare la voce."
+            ></textarea>
+            <div class="word-count">
+                <span id="wordCount">0 parole</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="speakBtn">
+                <span>🎤</span>
+                <span>Leggi</span>
+            </button>
+            <button id="stopBtn">
+                <span>⏹️</span>
+                <span>Stop</span>
+            </button>
+            <button id="clearBtn">
+                <span>🗑️</span>
+                <span>Cancella</span>
+            </button>
+        </div>
+
+        <div class="settings">
+            <div class="setting-group">
+                <label for="voiceSelect">Voce:</label>
+                <select id="voiceSelect">
+                    <option value="">Caricamento voci...</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label for="speedRange">Velocità: <span id="speedValue">1.0</span></label>
+                <input type="range" id="speedRange" min="0.5" max="2" step="0.1" value="1">
+            </div>
+            <div class="setting-group">
+                <label for="pitchRange">Tonalità: <span id="pitchValue">1.0</span></label>
+                <input type="range" id="pitchRange" min="0.5" max="2" step="0.1" value="1">
+            </div>
+        </div>
+
+        <div id="status" class="status ready">Pronto per la lettura</div>
+    </div>
+
+    <script>
+        class TextToSpeechReader {
+            constructor() {
+                this.synth = window.speechSynthesis;
+                this.utterance = null;
+                this.voices = [];
+                this.isReading = false;
+                
+                this.initElements();
+                this.loadVoices();
+                this.bindEvents();
+                this.updateWordCount();
+            }
+
+            initElements() {
+                this.textInput = document.getElementById('textInput');
+                this.speakBtn = document.getElementById('speakBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.voiceSelect = document.getElementById('voiceSelect');
+                this.speedRange = document.getElementById('speedRange');
+                this.pitchRange = document.getElementById('pitchRange');
+                this.speedValue = document.getElementById('speedValue');
+                this.pitchValue = document.getElementById('pitchValue');
+                this.status = document.getElementById('status');
+                this.wordCount = document.getElementById('wordCount');
+            }
+
+            loadVoices() {
+                const updateVoices = () => {
+                    this.voices = this.synth.getVoices();
+                    this.populateVoiceSelect();
+                };
+
+                updateVoices();
+                
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = updateVoices;
+                }
+            }
+
+            populateVoiceSelect() {
+                this.voiceSelect.innerHTML = '';
+                
+                // DEBUG: Mostra tutte le voci disponibili nella console
+                console.log('Tutte le voci disponibili:', this.voices.map(v => ({
+                    name: v.name,
+                    lang: v.lang,
+                    default: v.default
+                })));
+                
+                // Filtra SOLO le voci italiane
+                const italianVoices = this.voices.filter(voice => 
+                    voice.lang.toLowerCase().includes('it') || 
+                    voice.name.toLowerCase().includes('italian') ||
+                    voice.lang.toLowerCase().startsWith('it-')
+                );
+                
+                console.log('Voci italiane trovate:', italianVoices);
+                
+                if (italianVoices.length === 0) {
+                    // Mostra messaggio con istruzioni
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Nessuna voce italiana - Vedi istruzioni sotto';
+                    this.voiceSelect.appendChild(option);
+                    
+                    // Mostra le istruzioni per installare le voci
+                    this.showVoiceInstructions();
+                    return;
+                }
+
+                // Aggiungi solo le voci italiane
+                italianVoices.forEach((voice, index) => {
+                    const option = document.createElement('option');
+                    option.value = this.voices.indexOf(voice);
+                    option.textContent = `${voice.name} (${voice.lang})`;
+                    this.voiceSelect.appendChild(option);
+                });
+
+                // Seleziona automaticamente la prima voce italiana
+                this.voiceSelect.selectedIndex = 0;
+                
+                // Nascondi le istruzioni se ci sono voci
+                this.hideVoiceInstructions();
+            }
+
+            showVoiceInstructions() {
+                if (!document.getElementById('voiceInstructions')) {
+                    const instructions = document.createElement('div');
+                    instructions.id = 'voiceInstructions';
+                    instructions.innerHTML = `
+                        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 10px; padding: 20px; margin: 20px 0; color: #856404;">
+                            <h3 style="margin: 0 0 15px 0; color: #856404;">🔧 Come installare le voci italiane:</h3>
+                            <div style="text-align: left;">
+                                <p><strong>Windows 10/11:</strong></p>
+                                <ol style="margin: 5px 0 15px 20px;">
+                                    <li>Vai in <strong>Impostazioni → Accessibilità → Assistente vocale</strong></li>
+                                    <li>Clicca su <strong>"Aggiungi voci"</strong></li>
+                                    <li>Scarica <strong>"Italiano (Italia)"</strong> - Elsa, Cosimo o Isabella</li>
+                                    <li>Riavvia il browser dopo l'installazione</li>
+                                </ol>
+                                
+                                <p><strong>macOS:</strong></p>
+                                <ol style="margin: 5px 0 15px 20px;">
+                                    <li>Vai in <strong>Preferenze di Sistema → Accessibilità → Contenuti Parlati</strong></li>
+                                    <li>Clicca su <strong>"Voci di sistema"</strong></li>
+                                    <li>Scarica voci italiane come <strong>"Alice", "Luca" o "Paola"</strong></li>
+                                    <li>Riavvia il browser</li>
+                                </ol>
+                                
+                                <p><strong>Android/Chrome:</strong></p>
+                                <ol style="margin: 5px 0 15px 20px;">
+                                    <li>Vai in <strong>Impostazioni → Accessibilità → Output text-to-speech</strong></li>
+                                    <li>Seleziona <strong>Google Text-to-speech</strong></li>
+                                    <li>Installa il pacchetto <strong>"Italiano"</strong></li>
+                                </ol>
+                                
+                                <p style="margin: 15px 0 5px 0;"><strong>Alternativa temporanea:</strong></p>
+                                <p style="margin: 0; font-style: italic;">Usa comunque il pulsante "Leggi" - il browser userà la voce predefinita con pronuncia italiana base.</p>
+                            </div>
+                        </div>
+                    `;
+                    this.status.parentNode.insertBefore(instructions, this.status.nextSibling);
+                }
+            }
+
+            hideVoiceInstructions() {
+                const instructions = document.getElementById('voiceInstructions');
+                if (instructions) {
+                    instructions.remove();
+                }
+            }
+
+            bindEvents() {
+                this.speakBtn.addEventListener('click', () => this.speak());
+                this.stopBtn.addEventListener('click', () => this.stop());
+                this.clearBtn.addEventListener('click', () => this.clear());
+                
+                this.speedRange.addEventListener('input', (e) => {
+                    this.speedValue.textContent = e.target.value;
+                });
+                
+                this.pitchRange.addEventListener('input', (e) => {
+                    this.pitchValue.textContent = e.target.value;
+                });
+
+                this.textInput.addEventListener('input', () => this.updateWordCount());
+                this.textInput.addEventListener('paste', () => {
+                    setTimeout(() => this.updateWordCount(), 10);
+                });
+
+                // Supporto per scorciatoie da tastiera
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        this.speak();
+                    }
+                    if (e.key === 'Escape') {
+                        this.stop();
+                    }
+                });
+            }
+
+            updateWordCount() {
+                const text = this.textInput.value.trim();
+                const words = text ? text.split(/\s+/).length : 0;
+                this.wordCount.textContent = `${words} parole`;
+            }
+
+            speak() {
+                const text = this.textInput.value.trim();
+                
+                if (!text) {
+                    this.updateStatus('Inserisci del testo da leggere!', 'error');
+                    return;
+                }
+
+                if (this.isReading) {
+                    this.stop();
+                    return;
+                }
+
+                this.utterance = new SpeechSynthesisUtterance(text);
+                
+                // Verifica se ci sono voci italiane
+                const italianVoices = this.voices.filter(voice => 
+                    voice.lang.toLowerCase().includes('it') || 
+                    voice.name.toLowerCase().includes('italian') ||
+                    voice.lang.toLowerCase().startsWith('it-')
+                );
+
+                // Configura la voce italiana se disponibile
+                if (italianVoices.length > 0) {
+                    if (this.voiceSelect.value !== '' && this.voiceSelect.value !== 'Nessuna voce italiana - Vedi istruzioni sotto') {
+                        this.utterance.voice = this.voices[this.voiceSelect.value];
+                    } else {
+                        this.utterance.voice = italianVoices[0];
+                    }
+                }
+                
+                // Forza sempre la lingua italiana
+                this.utterance.lang = 'it-IT';
+                
+                this.utterance.rate = parseFloat(this.speedRange.value);
+                this.utterance.pitch = parseFloat(this.pitchRange.value);
+                this.utterance.volume = 1;
+
+                this.utterance.onstart = () => {
+                    this.isReading = true;
+                    this.speakBtn.innerHTML = '<span>⏸️</span><span>Pausa</span>';
+                    this.speakBtn.disabled = false;
+                    const voiceUsed = this.utterance.voice ? this.utterance.voice.name : 'Voce predefinita';
+                    this.updateStatus(`Lettura in corso con: ${voiceUsed}`, 'speaking');
+                };
+
+                this.utterance.onend = () => {
+                    this.resetPlayer();
+                    this.updateStatus('Lettura completata', 'ready');
+                };
+
+                this.utterance.onerror = (e) => {
+                    this.resetPlayer();
+                    this.updateStatus(`Errore: ${e.error}`, 'error');
+                };
+
+                this.synth.speak(this.utterance);
+            }
+
+            stop() {
+                this.synth.cancel();
+                this.resetPlayer();
+                this.updateStatus('Lettura interrotta', 'ready');
+            }
+
+            clear() {
+                this.stop();
+                this.textInput.value = '';
+                this.updateWordCount();
+                this.textInput.focus();
+                this.updateStatus('Testo cancellato', 'ready');
+            }
+
+            resetPlayer() {
+                this.isReading = false;
+                this.speakBtn.innerHTML = '<span>🎤</span><span>Leggi</span>';
+                this.speakBtn.disabled = false;
+            }
+
+            updateStatus(message, type = 'ready') {
+                this.status.textContent = message;
+                this.status.className = `status ${type}`;
+                
+                if (type === 'error') {
+                    this.status.style.background = 'rgba(231, 76, 60, 0.1)';
+                    this.status.style.color = '#e74c3c';
+                    setTimeout(() => {
+                        this.updateStatus('Pronto per la lettura', 'ready');
+                    }, 3000);
+                }
+            }
+        }
+
+        // Inizializza l'applicazione quando la pagina è caricata
+        document.addEventListener('DOMContentLoaded', () => {
+            new TextToSpeechReader();
+        });
+
+        // Controlla il supporto del browser
+        if (!('speechSynthesis' in window)) {
+            alert('Il tuo browser non supporta la sintesi vocale. Prova con Chrome, Firefox o Safari.');
+        }
+    </script>
+</body>
+</html>

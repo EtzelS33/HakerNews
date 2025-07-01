@@ -1,0 +1,27 @@
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+.env/
+
+# Generated analysis files
+hn_analysis/
+hn_audio/
+hn_screenshots/
+
+# Tool-specific files
+.claude/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
