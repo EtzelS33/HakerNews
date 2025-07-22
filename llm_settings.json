@@ -1,0 +1,5 @@
+{
+    "llm_provider": "ollama",
+    "api_url": "http://127.0.0.1:11434/api/generate",
+    "model_name": "gemma3:latest"
+}

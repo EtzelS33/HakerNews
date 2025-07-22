@@ -21,7 +21,7 @@ import re
 import sys
 
 # --- CONFIGURATIONS ---
-MODEL_NAME = "gemma3:latest"
+SETTINGS_FILE = "llm_settings.json"
 OUTPUT_DIR = "hn_analysis"
 AUDIO_DIR = "hn_audio"
 SCREENSHOT_DIR = "hn_screenshots"
@@ -193,66 +193,211 @@ def extract_text_from_url(url):
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = '\n'.join(chunk for chunk in chunks if chunk)
-        return text[:15000]
+        # Limita il testo a 8000 caratteri per rimanere sotto i limiti di contesto (es. 4096 token)
+        return text[:8000]
     except Exception as e:
         return f"Errore nell'estrazione del testo: {str(e)}"
 
-# --- CORE OLLAMA & ARTICLE PROCESSING ---
+def get_llm_config():
+    """Carica la configurazione LLM dal file o esegue la configurazione interattiva."""
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    return None
 
-def process_with_ollama(text, url, ollama_url):
-    """Processa il testo con Ollama per ottenere riassunto e tag in formato JSON."""
+def set_llm_config(config):
+    """Salva la configurazione LLM su file."""
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+def fetch_available_models(provider, api_url):
+    """Recupera i modelli disponibili dal servizio LLM."""
     try:
-        prompt = f"""
-        Analizza il seguente testo proveniente dall'URL: {url}
-        TESTO:
-        {text}
+        if provider == "ollama":
+            # L'endpoint per i tag/modelli di Ollama è /api/tags
+            check_url = urlparse(api_url)._replace(path="/api/tags").geturl()
+            response = requests.get(check_url, timeout=10)
+            response.raise_for_status()
+            models = response.json().get('models', [])
+            return [model['name'] for model in models]
         
-        Restituisci l'output in formato JSON con questa esatta struttura:
-        {{
-            "title": "Titolo dell'articolo, tradotto in italiano",
-            "summary": "Un riassunto conciso in ITALIANO (massimo 100 parole) del contenuto.",
-            "tags": ["elenco", "di", "3-7", "tag", "rilevanti"],
-            "main_link": "URL principale menzionata nell'articolo o stringa vuota se non presente"
-        }}
+        elif provider == "lmstudio":
+            # L'endpoint per i modelli in stile OpenAI è /v1/models
+            check_url = urlparse(api_url)._replace(path="/v1/models").geturl()
+            response = requests.get(check_url, timeout=10)
+            response.raise_for_status()
+            models = response.json().get('data', [])
+            return [model['id'] for model in models]
+            
+    except requests.exceptions.RequestException as e:
+        print(f"\nAvviso: Impossibile recuperare i modelli da {provider.upper()}. {e}")
+    except Exception as e:
+        print(f"\nAvviso: Errore imprevisto durante il recupero dei modelli: {e}")
         
-        IMPORTANTE:
-        - Traduci sempre il titolo e il riassunto in italiano.
-        - I tag devono essere specifici e pertinenti.
-        """
+    return []
+
+def interactive_config(current_config=None):
+    """Guida l'utente nella configurazione interattiva dell'LLM."""
+    print("--- Configurazione LLM Interattiva ---")
+    
+    # Provider
+    default_provider = current_config.get('llm_provider', 'ollama') if current_config else 'ollama'
+    provider = input(f"Scegli il provider [ollama/lmstudio] (default: {default_provider}): ").strip().lower() or default_provider
+    while provider not in ['ollama', 'lmstudio']:
+        print("Provider non valido.")
+        provider = input("Scegli tra [ollama/lmstudio]: ").strip().lower()
+
+    # API URL
+    default_urls = {
+        'ollama': 'http://127.0.0.1:11434/api/generate',
+        'lmstudio': 'http://127.0.0.1:1234/v1/chat/completions'
+    }
+    default_api_url = current_config.get('api_url', default_urls[provider]) if current_config else default_urls[provider]
+    api_url = input(f"Inserisci l'URL dell'API (default: {default_api_url}): ").strip() or default_api_url
+
+    # Model Name (selezione dinamica)
+    print("\nRecupero modelli disponibili...")
+    available_models = fetch_available_models(provider, api_url)
+    model_name = None
+
+    if available_models:
+        print("Modelli disponibili rilevati:")
+        for i, model in enumerate(available_models):
+            print(f"  {i + 1}: {model}")
         
-        response = requests.post(
-            ollama_url,
-            json={
-                "model": MODEL_NAME,
-                "prompt": prompt,
-                "format": "json",  # Forza l'output JSON
-                "stream": False
-            },
-            timeout=180
-        )
+        last_model = current_config.get('model_name') if current_config else None
+        default_choice = ""
+        if last_model and last_model in available_models:
+            default_choice = str(available_models.index(last_model) + 1)
+
+        while not model_name:
+            choice = input(f"Scegli un modello (numero) [default: {default_choice}]: ").strip() or default_choice
+            try:
+                model_index = int(choice) - 1
+                if 0 <= model_index < len(available_models):
+                    model_name = available_models[model_index]
+                else:
+                    print("Scelta non valida.")
+            except ValueError:
+                print("Inserisci un numero.")
+    else:
+        print("Nessun modello rilevato automaticamente. Procedere con inserimento manuale.")
+        default_model = current_config.get('model_name', 'gemma3:latest') if current_config else 'gemma3:latest'
+        model_name = input(f"Inserisci il nome del modello (default: {default_model}): ").strip() or default_model
+
+    config = {
+        'llm_provider': provider,
+        'api_url': api_url,
+        'model_name': model_name
+    }
+    
+    set_llm_config(config)
+    print("\nConfigurazione salvata.")
+    return config
+
+# --- CORE LLM & ARTICLE PROCESSING ---
+
+
+def process_with_llm(text, url, api_url, provider, model_name):
+    """Processa il testo con un LLM locale per ottenere riassunto e tag in formato JSON."""
+    prompt = f"""
+    Analizza il seguente testo proveniente dall'URL: {url}
+    TESTO:
+    {text}
+
+    Restituisci l'output ESCLUSIVAMENTE in formato JSON, senza alcuna formattazione markdown, commento o testo aggiuntivo.
+    L'output deve essere un singolo oggetto JSON valido.
+
+    La struttura JSON deve essere la seguente:
+    {{
+        "title": "Titolo dell'articolo, tradotto in italiano",
+        "summary": "Un riassunto conciso in ITALIANO (massimo 100 parole) del contenuto. Il riassunto deve essere una singola stringa di testo senza caratteri di nuova riga.",
+        "tags": ["elenco", "di", "3-7", "tag", "rilevanti"],
+        "main_link": "URL principale menzionata nell'articolo o stringa vuota se non presente"
+    }}
+
+    ATTENZIONE: La tua risposta deve iniziare con '{{' e finire con '}}' e contenere solo il JSON.
+    """
+
+    headers = {"Content-Type": "application/json"}
+    payload = {}
+
+    if provider == "ollama":
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "format": "json",
+            "stream": False
+        }
+    elif provider == "lmstudio":
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "stream": False
+        }
+    
+    try:
+        response = requests.post(api_url, headers=headers, json=payload, timeout=180)
         response.raise_for_status()
         
         result = response.json()
-        parsed_json = json.loads(result.get('response', '{}'))
+        
+        if provider == "ollama":
+            raw_response = result.get('response', '')
+        elif provider == "lmstudio":
+            raw_response = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        if not raw_response.strip():
+            print(f"\n[AVVISO] Risposta vuota ricevuta da '{provider}'. Salto articolo.")
+            return None
+
+        single_line_response = raw_response.replace('\n', ' ').replace('\r', '')
+        
+        json_start = single_line_response.find('{')
+        if json_start == -1:
+            print(f"\n[AVVISO] Nessun oggetto JSON trovato nella risposta da '{provider}'.")
+            return None
+
+        open_braces = 0
+        json_end = -1
+        for i, char in enumerate(single_line_response[json_start:]):
+            if char == '{':
+                open_braces += 1
+            elif char == '}':
+                open_braces -= 1
+            if open_braces == 0:
+                json_end = json_start + i + 1
+                break
+        
+        if json_end == -1:
+            print(f"\n[AVVISO] Nessun oggetto JSON completo trovato nella risposta da '{provider}'.")
+            return None
+
+        clean_json_str = single_line_response[json_start:json_end]
+        
+        try:
+            parsed_json = json.loads(clean_json_str)
+        except json.JSONDecodeError:
+            print(f"\n[AVVISO] Errore di decodifica JSON dalla risposta di '{provider}'. Risposta: {clean_json_str}")
+            return None
 
         if not all(k in parsed_json for k in ["summary", "tags", "title"]):
-            raise ValueError("JSON ricevuto da Ollama è incompleto.")
+            print(f"\n[AVVISO] JSON da '{provider}' è incompleto. Risposta: {clean_json_str}. Salto articolo.")
+            return None
             
         return parsed_json
 
     except requests.exceptions.RequestException as e:
-        print(f"\n[ERRORE FATALE] Errore di connessione o timeout con Ollama: {e}")
-        print("Il processo di analisi verrà interrotto. Controlla che Ollama sia in esecuzione e non sovraccarico.")
-        raise
-    except json.JSONDecodeError as e:
-        print(f"\n[ERRORE FATALE] Fallimento nel parsing del JSON da Ollama: {e}")
-        print(f"Risposta ricevuta: {result.get('response', '')}")
+        # Questo è un errore fatale, il servizio LLM non è raggiungibile.
+        print(f"\n[ERRORE FATALE] Errore di connessione o timeout con {provider.upper()}: {e}")
+        print(f"Il processo di analisi verrà interrotto. Controlla che il servizio sia in esecuzione e non sovraccarico.")
         raise
     except Exception as e:
-        print(f"\n[ERRORE IMPREVISTO] in process_with_ollama: {e}")
-        raise
+        # Gestisce altri errori imprevisti senza bloccare tutto il processo.
+        print(f"\n[ERRORE IMPREVISTO] in process_with_llm: {e}")
+        return None
 
-def process_article(entry, ollama_url, generate_audio_flag=False):
+def process_article(entry, api_url, llm_provider, model_name, generate_audio_flag=False):
     """Processa un singolo articolo: estrae, analizza, salva."""
     original_title = entry.get('title', 'No Title')
     link = entry.get('link', '')
@@ -280,11 +425,15 @@ def process_article(entry, ollama_url, generate_audio_flag=False):
     text = extract_text_from_url(link)
     
     if "Errore" in text:
-        print(f"Salto articolo \"{original_title}\" a causa di un errore di estrazione: {text}")
+        print(f'Salto articolo "{original_title}" a causa di un errore di estrazione: {text}')
         return None
 
-    result = process_with_ollama(text, link, ollama_url)
+    result = process_with_llm(text, link, api_url, llm_provider, model_name)
     
+    if result is None:
+        print(f'Salto articolo "{original_title}" a causa di un errore di analisi LLM.')
+        return None
+
     tags = result.get("tags", [])
     macro_tags = get_macro_tags(tags)
     
@@ -321,28 +470,39 @@ def process_article(entry, ollama_url, generate_audio_flag=False):
     
     return processed_article
 
-def process_all_articles(entries, ollama_url, limit=None, generate_audio=False, workers=2):
+def process_all_articles(entries, config, limit=None, generate_audio=False, workers=2):
     """Processa tutti gli articoli con multithreading."""
     if limit:
         entries = entries[:limit]
     
     results = []
-    print(f"Analisi di {len(entries)} articoli in corso (max {workers} worker)...")
+    print(f"Analisi di {len(entries)} articoli in corso (max {workers} worker)... con {config['llm_provider']} su {config['api_url']} usando il modello {config['model_name']}")
     
     with ThreadPoolExecutor(max_workers=workers) as executor:
         from functools import partial
-        process_func = partial(process_article, ollama_url=ollama_url, generate_audio_flag=generate_audio)
+        process_func = partial(process_article, 
+                               api_url=config['api_url'], 
+                               llm_provider=config['llm_provider'],
+                               model_name=config['model_name'],
+                               generate_audio_flag=generate_audio)
         
         future_to_entry = {executor.submit(process_func, entry): entry for entry in entries}
         
         for future in tqdm(future_to_entry, total=len(entries)):
+            entry = future_to_entry[future]
+            original_title = entry.get('title', 'No Title')
             try:
                 result = future.result()
                 if result:
                     results.append(result)
-            except Exception:
+            except requests.exceptions.RequestException:
+                # Errore fatale di connessione, interrompe tutto.
+                print(f"\n[ERRORE FATALE] Rilevato errore di connessione in un worker. Arresto del processo.")
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
+            except Exception as e:
+                # Altri errori non fatali, registra e continua.
+                print(f"\n[ERRORE WORKER] Errore durante l'analisi di '{original_title}': {e}. L'analisi continua.")
 
     with open(os.path.join(OUTPUT_DIR, "all_articles.json"), 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
@@ -527,37 +687,56 @@ def cleanup_old_data(days_to_keep=7):
                 except Exception as e:
                     print(f"Errore durante l'eliminazione di {file_path}: {e}")
 
-def check_ollama_status(ollama_url):
-    """Verifica se il servizio Ollama è in esecuzione."""
+def check_llm_status(api_url, provider):
+    """Verifica se il servizio LLM è in esecuzione."""
     try:
-        base_url = urlparse(ollama_url)._replace(path="", query="", fragment="").geturl()
-        print(f"Verifica dello stato di Ollama a: {base_url}...")
-        response = requests.get(base_url, timeout=5)
-        if response.status_code == 200 and "Ollama is running" in response.text:
-            print("Servizio Ollama rilevato e funzionante.")
-            return True
-        else:
-            print(f"\n[ERRORE] Ollama ha risposto ma potrebbe non essere operativo (Status: {response.status_code}).")
-            return False
+        if provider == "ollama":
+            # L'URL per il check di Ollama è la radice
+            check_url = urlparse(api_url)._replace(path="", query="", fragment="").geturl()
+            print(f"Verifica dello stato di Ollama a: {check_url}...")
+            response = requests.get(check_url, timeout=5)
+            if response.status_code == 200 and "Ollama is running" in response.text:
+                print("Servizio Ollama rilevato e funzionante.")
+                return True
+            else:
+                print(f"\n[ERRORE] Ollama ha risposto ma potrebbe non essere operativo (Status: {response.status_code}).")
+                return False
+        elif provider == "lmstudio":
+            # Per LM Studio, possiamo provare a fare una richiesta leggera, es. elenco modelli
+            # L'endpoint per i modelli è /v1/models
+            check_url = urlparse(api_url)._replace(path="/v1/models").geturl()
+            print(f"Verifica dello stato di LM Studio a: {check_url}...")
+            response = requests.get(check_url, timeout=10)
+            if response.status_code == 200:
+                print("Servizio LM Studio (o compatibile OpenAI) rilevato e funzionante.")
+                return True
+            else:
+                print(f"\n[ERRORE] LM Studio ha risposto ma potrebbe non essere operativo (Status: {response.status_code}).")
+                return False
+
     except requests.exceptions.RequestException:
-        print("\n[ERRORE] Impossibile connettersi a Ollama.")
-        print(f"Assicurati che Ollama sia in esecuzione e raggiungibile all'indirizzo specificato.")
-        print("Puoi avviare Ollama dal menu Start o eseguendo 'ollama serve' nel terminale.")
+        print(f"\n[ERRORE] Impossibile connettersi a {provider.upper()} all'URL: {api_url}")
+        print(f"Assicurati che il servizio sia in esecuzione e l'URL sia corretto.")
         return False
+    return False
 
 # --- MAIN EXECUTION ---
 
 def main():
-    parser = argparse.ArgumentParser(description='Analizza il feed di Hacker News usando Ollama.')
+    parser = argparse.ArgumentParser(description='Analizza il feed di Hacker News usando un LLM locale.')
     parser.add_argument('--limit', type=int, default=None, help='Numero massimo di articoli da analizzare.')
     parser.add_argument('--generate-audio', action='store_true', help='Genera file audio MP3 per i riassunti.')
-    parser.add_argument('--workers', type=int, default=1, help='Numero di worker paralleli per l\'analisi (default: 2).')
-    parser.add_argument('--ollama-url', type=str, default="http://127.0.0.1:11434/api/generate", help="URL dell'API di Ollama.")
+    parser.add_argument('--workers', type=int, default=1, help='Numero di worker paralleli per l\'analisi (default: 1). Aumentare con cautela.')
+    parser.add_argument('-o', '--configure', action='store_true', help='Forza la configurazione interattiva dell\'LLM.')
     parser.add_argument('--cleanup', type=int, default=None, metavar='DAYS', help='Pulisce i dati più vecchi del numero di giorni specificato.')
     
     args = parser.parse_args()
 
-    if not check_ollama_status(args.ollama_url):
+    config = get_llm_config()
+    if args.configure or not config:
+        config = interactive_config(config)
+
+    if not check_llm_status(config['api_url'], config['llm_provider']):
         sys.exit(1)
 
     setup_environment()
@@ -575,7 +754,7 @@ def main():
     try:
         articles = process_all_articles(
             entries, 
-            args.ollama_url, 
+            config,
             args.limit, 
             args.generate_audio, 
             args.workers
