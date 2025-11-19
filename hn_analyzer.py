@@ -457,225 +457,17 @@ def filter_by_tags(articles, selected_tags):
 
 def generate_html(articles, selected_tags):
     """Genera una pagina HTML con i risultati."""
+
+    # Nuova versione: usa template HTML
     timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{OUTPUT_DIR}/hn_analysis_{timestamp}.html"
-    
-    html = f"""<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisi Hacker News - {time.strftime("%d/%m/%Y")}</title>
-    <style>
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f9f9f9;
-        }}
-        header {{
-            background: #ff6600;
-            color: white;
-            padding: 20px;
-            margin-bottom: 30px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }}
-        h1 {{
-            margin: 0;
-            font-size: 28px;
-        }}
-        .filter-info {{
-            margin-top: 10px;
-            font-size: 14px;
-            opacity: 0.8;
-        }}
-        .article {{
-            background: white;
-            margin-bottom: 20px;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            position: relative;
-        }}
-        .article h2 {{
-            margin-top: 0;
-            color: #333;
-        }}
-        .article h2 a {{
-            text-decoration: none;
-            color: #0366d6;
-        }}
-        .article h2 a:hover {{
-            text-decoration: underline;
-        }}
-        .domain {{
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 15px;
-        }}
-        .summary {{
-            margin-bottom: 15px;
-            line-height: 1.6;
-        }}
-        .tags {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 15px;
-        }}
-        .tag {{
-            background: #f1f8ff;
-            color: #0366d6;
-            padding: 3px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            border: 1px solid #cce5ff;
-        }}
-        .macro-tags {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
-            margin-bottom: 10px;
-        }}
-        .macro-tag {{
-            background: #ff6600;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 500;
-        }}
-        .main-link {{
-            margin-top: 15px;
-        }}
-        .main-link a {{
-            color: #0366d6;
-            text-decoration: none;
-        }}
-        .main-link a:hover {{
-            text-decoration: underline;
-        }}
-        .audio-btn {{
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #ff6600;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }}
-        .audio-btn:hover {{
-            background: #e55500;
-        }}
-        .audio-btn:disabled {{
-            background: #ccc;
-            cursor: not-allowed;
-        }}
-        .audio-btn svg {{
-            width: 16px;
-            height: 16px;
-        }}
-        .download-audio {{
-            display: inline-block;
-            margin-top: 10px;
-            background: #0366d6;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 5px;
-            text-decoration: none;
-            font-size: 14px;
-        }}
-        .download-audio:hover {{
-            background: #0256c7;
-        }}
-        .screenshot-thumb {{
-            margin-top: 15px;
-            max-width: 300px;
-            cursor: pointer;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }}
-        .screenshot-thumb:hover {{
-            transform: scale(1.05);
-        }}
-        /* Modale per immagini */
-        .modal {{
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.9);
-            animation: fadeIn 0.3s;
-        }}
-        @keyframes fadeIn {{
-            from {{ opacity: 0; }}
-            to {{ opacity: 1; }}
-        }}
-        .modal-content {{
-            margin: auto;
-            display: block;
-            width: 90%;
-            max-width: 1200px;
-            max-height: 90vh;
-            object-fit: contain;
-            animation: zoomIn 0.3s;
-        }}
-        @keyframes zoomIn {{
-            from {{ transform: scale(0.8); }}
-            to {{ transform: scale(1); }}
-        }}
-        .close {{
-            position: absolute;
-            top: 15px;
-            right: 35px;
-            color: #f1f1f1;
-            font-size: 40px;
-            font-weight: bold;
-            transition: 0.3s;
-            cursor: pointer;
-        }}
-        .close:hover,
-        .close:focus {{
-            color: #bbb;
-            text-decoration: none;
-        }}
-        footer {{
-            margin-top: 30px;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }}
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Analisi Hacker News - {time.strftime("%d/%m/%Y")}</h1>
-        <div class="filter-info">
-            {f"Filtrato per tag: {', '.join(selected_tags)}" if selected_tags else "Tutti gli articoli"}
-        </div>
-    </header>
-    
-    <main>
-    """
-    
+    template_path = os.path.join(os.path.dirname(__file__), "hn_template.html")
+    with open(template_path, "r", encoding="utf-8") as f:
+        template = f.read()
+
+    # Genera HTML per tutti gli articoli
+    articles_html = ""
+    all_summaries = []
     for i, article in enumerate(articles):
         title = article.get("title", "Titolo non disponibile")
         link = article.get("link", "#")
@@ -687,17 +479,13 @@ def generate_html(articles, selected_tags):
         audio_file = article.get("audio_file", "")
         screenshot_file = article.get("screenshot_file", "")
         thumbnail_base64 = article.get("thumbnail_base64", "")
-        
-        # Genera ID univoco per l'articolo
         article_id = f"article-{i}"
-        
-        # Costruisci l'HTML per lo screenshot se presente
+        all_summaries.append(f"{title}. {summary}")
         screenshot_html = ""
         if thumbnail_base64 and screenshot_file:
             onclick_handler = f"openModal('{article_id}', '../{SCREENSHOT_DIR}/{screenshot_file}')"
             screenshot_html = f'<img src="{thumbnail_base64}" alt="Screenshot di {title}" class="screenshot-thumb" onclick="{onclick_handler}">'
-        
-        html += f"""
+        articles_html += f'''
         <article class="article" id="{article_id}">
             <button class="audio-btn" onclick="speakText(document.querySelector('#{article_id} .summary').textContent, this)">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -707,108 +495,29 @@ def generate_html(articles, selected_tags):
             </button>
             <h2><a href="{link}" target="_blank">{title}</a></h2>
             <div class="domain">{domain}</div>
-            {'<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>' if macro_tags else ''}
+            {('<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>') if macro_tags else ''}
             <div class="summary">{summary}</div>
             <div class="tags">
-                {" ".join([f'<span class="tag">{tag}</span>' for tag in tags])}
+                {' '.join([f'<span class="tag">{tag}</span>' for tag in tags])}
             </div>
             {f'<div class="main-link">Link principale: <a href="{main_link}" target="_blank">{main_link}</a></div>' if main_link else ''}
             {f'<a href="../{AUDIO_DIR}/{audio_file}" class="download-audio" download>📥 Scarica Audio MP3</a>' if audio_file else ''}
             {screenshot_html}
         </article>
-        """
-    
-    html += f"""
-    </main>
-    
-    <!-- Modale per le immagini -->
-    <div id="imageModal" class="modal">
-        <span class="close" onclick="closeModal()">&times;</span>
-        <img class="modal-content" id="modalImage">
-    </div>
-    
-    <footer>
-        Generato il {time.strftime("%d/%m/%Y alle %H:%M:%S")} · Articoli analizzati: {len(articles)}
-    </footer>
-    
-    <script>
-        // Funzione per leggere il testo usando Web Speech API
-        function speakText(text, button) {{
-            if ('speechSynthesis' in window) {{
-                // Cancella eventuali letture in corso
-                window.speechSynthesis.cancel();
-                
-                // Disabilita il pulsante durante la lettura
-                button.disabled = true;
-                button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg> Stop';
-                
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'it-IT';
-                utterance.rate = 1.1;
-                utterance.pitch = 1;
-                
-                utterance.onend = function() {{
-                    button.disabled = false;
-                    button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg> Ascolta';
-                }};
-                
-                utterance.onerror = function() {{
-                    button.disabled = false;
-                    button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg> Ascolta';
-                    alert('Errore nella sintesi vocale');
-                }};
-                
-                window.speechSynthesis.speak(utterance);
-                
-                // Gestisce il click per fermare la lettura
-                button.onclick = function() {{
-                    if (window.speechSynthesis.speaking) {{
-                        window.speechSynthesis.cancel();
-                        button.disabled = false;
-                        button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg> Ascolta';
-                    }} else {{
-                        speakText(text, button);
-                    }}
-                }};
-            }} else {{
-                alert('Il tuo browser non supporta la sintesi vocale');
-            }}
-        }}
-        
-        // Funzioni per il modale delle immagini
-        function openModal(articleId, imagePath) {{
-            const modal = document.getElementById('imageModal');
-            const modalImg = document.getElementById('modalImage');
-            modal.style.display = 'block';
-            modalImg.src = imagePath;
-            
-            // Chiudi il modale cliccando fuori dall'immagine
-            modal.onclick = function(event) {{
-                if (event.target === modal) {{
-                    closeModal();
-                }}
-            }}
-        }}
-        
-        function closeModal() {{
-            const modal = document.getElementById('imageModal');
-            modal.style.display = 'none';
-        }}
-        
-        // Chiudi il modale con il tasto ESC
-        document.addEventListener('keydown', function(event) {{
-            if (event.key === 'Escape') {{
-                closeModal();
-            }}
-        }});
-    </script>
-</body>
-</html>
-    """
-    
+        '''
+
+    # Prepara i dati per il template
+    filter_info = f"Filtrato per tag: {', '.join(selected_tags)}" if selected_tags else "Tutti gli articoli"
+    html_out = template.replace("{{date}}", time.strftime("%d/%m/%Y")) \
+        .replace("{{filter_info}}", filter_info) \
+        .replace("{{articles_html}}", articles_html) \
+        .replace("{{all_summaries}}", "\n---\n".join(all_summaries)) \
+        .replace("{{datetime}}", time.strftime("%d/%m/%Y alle %H:%M:%S")) \
+        .replace("{{num_articles}}", str(len(articles)))
+
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write(html)
-    
+        f.write(html_out)
+
     return filename
 
 def cleanup_old_data(days_to_keep=7):

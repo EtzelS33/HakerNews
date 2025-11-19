@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisi Hacker News - {{date}}</title>
+    <style>
+        .btn-tts {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+            border-radius: 32px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 10px 28px;
+            cursor: pointer;
+            color: #fff;
+            box-shadow: 0 2px 8px #0001;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: filter 0.15s;
+        }
+        .btn-tts.read {
+            background: linear-gradient(90deg, #5a6cff 0%, #8f5cff 100%);
+        }
+        .btn-tts.stop {
+            background: linear-gradient(90deg, #ff5a5a 0%, #ff8f5c 100%);
+        }
+        .btn-tts svg {
+            width: 1.3em;
+            height: 1.3em;
+            vertical-align: middle;
+        }
+        .article-content-wrapper {
+            display: flex;
+            flex-direction: row;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        .article-image-col {
+            flex-shrink: 0;
+            width: 220px;
+            min-height: 120px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .screenshot-thumb {
+            max-width: 200px;
+            max-height: 120px;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px #0001;
+            background: #fff;
+        }
+        .article-main-col {
+            flex: 1 1 0%;
+        }
+        #tts-engine {
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 15px;
+        }
+        .article {
+            /* ...esistente... */
+            border-bottom: 1.5px solid #e0e0e0;
+        }
+        /* Modale per immagini */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            width: 90%;
+            max-width: 1200px;
+            max-height: 90vh;
+            object-fit: contain;
+            animation: zoomIn 0.3s;
+        }
+        @keyframes zoomIn {
+            from { transform: scale(0.8); }
+            to { transform: scale(1); }
+        }
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #bbb;
+            text-decoration: none;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        header {
+            background: #ff6600;
+            color: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .filter-info {
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .article {
+            background: white;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .article h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .article h2 a {
+            text-decoration: none;
+            color: #0366d6;
+        }
+        .article h2 a:hover {
+            text-decoration: underline;
+        }
+        .domain {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .summary {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        .tag {
+            background: #f1f8ff;
+            color: #0366d6;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            border: 1px solid #cce5ff;
+        }
+        .macro-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .macro-tag {
+            background: #ff6600;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .main-link {
+            margin-top: 15px;
+        }
+        .main-link a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        .main-link a:hover {
+            text-decoration: underline;
+        }
+        .audio-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ff6600;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .audio-btn:hover {
+            background: #e55500;
+        }
+        .audio-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .audio-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+        .download-audio {
+            display: inline-block;
+            margin-top: 10px;
+            background: #0366d6;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .download-audio:hover {
+            background: #0256c7;
+        }
+        .screenshot-thumb {
+            margin-top: 15px;
+            max-width: 300px;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .screenshot-thumb:hover {
+            transform: scale(1.05);
+        }
+        /* Modale per immagini */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            width: 90%;
+            max-width: 1200px;
+            max-height: 90vh;
+            object-fit: contain;
+            animation: zoomIn 0.3s;
+        }
+        @keyframes zoomIn {
+            from { transform: scale(0.8); }
+            to { transform: scale(1); }
+        }
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #bbb;
+            text-decoration: none;
+        }
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="margin-top:18px; margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+            <button class="btn-tts read" id="play-all-btn" onclick="playAllSummaries()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 19V5M5 12l7-7 7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Leggi
+            </button>
+            <button class="btn-tts stop" onclick="stopTTS()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" stroke-width="2"/></svg>
+                Stop
+            </button>
+        </div>
+        <h1>Analisi Hacker News - {{date}}</h1>
+        <div class="filter-info">
+            {{filter_info}}
+        </div>
+        <div style="margin-top:20px;display:flex;align-items:center;gap:10px;">
+            <span style="font-weight:500;">Tutti gli articoli</span>
+            <div style="flex:1"></div>
+            <label for="tts-engine">Motore sintesi vocale:</label>
+            <select id="tts-engine"></select>
+        </div>
+    </header>
+    <main>
+    {{articles_html}}
+        <textarea id="all-summaries" style="display:none;">{{all_summaries}}</textarea>
+    </main>
+
+    <!-- Modale per le immagini -->
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+    </main>
+    <footer>
+        Generato il {{datetime}} · Articoli analizzati: {{num_articles}}
+    </footer>
+    <script>
+        function stopTTS() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const btn = document.getElementById('play-all-btn');
+                if (btn) btn.disabled = false;
+            }
+        }
+        // Popola dinamicamente la lista delle voci disponibili
+        function populateVoices() {
+            const ttsEngine = document.getElementById('tts-engine');
+            if (!ttsEngine) return;
+            ttsEngine.innerHTML = '';
+            let voices = window.speechSynthesis.getVoices();
+            // Filtra solo voci italiane e inglesi (ma mostra tutte, incluse le "Natural")
+            let filtered = voices.filter(v => v.lang.startsWith('it') || v.lang.startsWith('en'));
+            // Ordina: prima italiano, poi inglese, ma non escludere "Natural"
+            let naturals = filtered.filter(v => v.name.includes('Natural')).concat(filtered.filter(v => !v.name.includes('Natural')));
+
+            //se ci sono voci naturali allora uso le naturali altrimenti tutte le filtrate
+            if (naturals.length > 0) {
+                filtered = naturals;
+            }
+            filtered.sort((a, b) => {
+                if (a.lang.startsWith('it') && !b.lang.startsWith('it')) return -1;
+                if (!a.lang.startsWith('it') && b.lang.startsWith('it')) return 1;
+                return 0;
+            });
+            filtered.forEach(function(voice) {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                // Mostra anche se è "Natural" nel nome
+                option.textContent = `${voice.name} - ${voice.lang}`;
+                ttsEngine.appendChild(option);
+            });
+        }
+        populateVoices();
+        if (typeof speechSynthesis !== 'undefined') {
+            speechSynthesis.onvoiceschanged = populateVoices;
+        }
+        // Funzione per aprire la modale con l'immagine grande
+        function openModal(articleId, imageBase64) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'block';
+            modalImg.src = imageBase64; // Usa sempre base64 fornito
+            // Chiudi il modale cliccando fuori dall'immagine
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            }
+        }
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+        }
+        // Chiudi il modale con il tasto ESC
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+        // Funzione per leggere il testo usando Web Speech API
+        function speakText(text, button) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                if (button) button.disabled = true;
+                const utterance = new SpeechSynthesisUtterance(text);
+                // Imposta la voce selezionata
+                const ttsEngine = document.getElementById('tts-engine');
+                const selectedVoice = ttsEngine && ttsEngine.value;
+                let voices = window.speechSynthesis.getVoices();
+                if (selectedVoice) {
+                    const found = voices.find(v => v.name === selectedVoice);
+                    if (found) utterance.voice = found;
+                }
+                utterance.lang = utterance.voice ? utterance.voice.lang : 'it-IT';
+                utterance.rate = 1.1;
+                utterance.pitch = 1;
+                utterance.onend = function() {
+                    if (button) button.disabled = false;
+                };
+                utterance.onerror = function() {
+                    if (button) button.disabled = false;
+                    alert('Errore nella sintesi vocale');
+                };
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert('Il tuo browser non supporta la sintesi vocale');
+            }
+        }
+        // Lettura sequenziale di tutti i riassunti
+        function playAllSummaries() {
+            const btn = document.getElementById('play-all-btn');
+            const summaries = document.getElementById('all-summaries').value.split('\n---\n');
+            let idx = 0;
+            btn.disabled = true;
+            const ttsEngine = document.getElementById('tts-engine');
+            const selectedVoice = ttsEngine && ttsEngine.value;
+            let voices = window.speechSynthesis.getVoices();
+            let selectedVoiceObj = voices.find(v => v.name === selectedVoice);
+            function readNext() {
+                if (idx >= summaries.length) {
+                    btn.disabled = false;
+                    return;
+                }
+                const utter = new SpeechSynthesisUtterance(summaries[idx]);
+                if (selectedVoiceObj) {
+                    utter.voice = selectedVoiceObj;
+                    utter.lang = selectedVoiceObj.lang;
+                } else {
+                    utter.lang = 'it-IT';
+                }
+                utter.rate = 1.1;
+                utter.pitch = 1;
+                utter.onend = function() {
+                    idx++;
+                    readNext();
+                };
+                utter.onerror = function() {
+                    btn.disabled = false;
+                    alert('Errore nella sintesi vocale');
+                };
+                window.speechSynthesis.speak(utter);
+            }
+            window.speechSynthesis.cancel();
+            readNext();
+        }
+    </script>
+</body>
+</html>

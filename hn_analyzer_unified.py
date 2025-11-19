@@ -1,34 +1,36 @@
+import os
+import sys
+import platform
 import requests
 import feedparser
 import json
-import os
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 import time
-from concurrent.futures import ThreadPoolExecutor
 import argparse
-from tqdm import tqdm
 import webbrowser
-from gtts import gTTS
-from playwright.sync_api import sync_playwright
-import hashlib
 import glob
-from datetime import datetime, timedelta
+import hashlib
 import base64
-from PIL import Image
 import io
 import re
-import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+from gtts import gTTS
+from PIL import Image
+from tqdm import tqdm
+from playwright.sync_api import sync_playwright
 
-# --- CONFIGURATIONS ---
+# --- CONFIGURAZIONI GENERALI ---
 SETTINGS_FILE = "llm_settings.json"
 OUTPUT_DIR = "hn_analysis"
 AUDIO_DIR = "hn_audio"
 SCREENSHOT_DIR = "hn_screenshots"
+TEMPLATE_FILE = "hn_template.html"
 
-# --- MACRO TAGS ---
+# --- MACRO TAGS (unificato) ---
 MACRO_TAGS = {
-    "AI & Machine Learning": [
+    "🤖 AI & Machine Learning": [
         "ai", "artificial intelligence", "machine learning", "ml", "deep learning",
         "neural network", "llm", "large language model", "gpt", "generative ai",
         "computer vision", "nlp", "natural language processing", "transformer",
@@ -36,55 +38,55 @@ MACRO_TAGS = {
         "claude", "gemini", "copilot", "ai ethics", "agi", "reinforcement learning",
         "tensorflow", "pytorch", "scikit-learn", "hugging face"
     ],
-    "Programmazione & DevOps": [
+    "💻 Programmazione & DevOps": [
         "programming", "coding", "software development", "javascript", "python",
         "java", "c++", "rust", "go", "typescript", "react", "vue", "angular",
         "docker", "kubernetes", "devops", "ci/cd", "git", "github", "gitlab",
         "api", "microservices", "serverless", "cloud native", "agile", "scrum"
     ],
-    "Sicurezza & Privacy": [
+    "🔒 Sicurezza & Privacy": [
         "security", "cybersecurity", "privacy", "encryption", "cryptography",
         "vulnerability", "exploit", "hacking", "penetration testing", "firewall",
         "vpn", "tor", "gdpr", "data protection", "password", "authentication",
         "2fa", "zero trust", "ransomware", "malware", "phishing"
     ],
-    "Web & Cloud": [
+    "🌐 Web & Cloud": [
         "web development", "frontend", "backend", "full stack", "aws", "azure",
         "google cloud", "gcp", "cloud computing", "saas", "paas", "iaas",
         "cdn", "hosting", "domain", "ssl", "https", "rest api", "graphql",
         "websocket", "pwa", "jamstack", "edge computing"
     ],
-    "Data & Database": [
+    "📊 Data & Database": [
         "database", "sql", "nosql", "mongodb", "postgresql", "mysql", "redis",
         "elasticsearch", "data science", "big data", "data analytics", "etl",
         "data warehouse", "data lake", "hadoop", "spark", "kafka", "data visualization",
         "tableau", "power bi", "pandas", "numpy"
     ],
-    "Startup & Business": [
+    "🚀 Startup & Business": [
         "startup", "entrepreneurship", "venture capital", "vc", "funding",
         "ipo", "acquisition", "merger", "business model", "saas business",
         "b2b", "b2c", "growth hacking", "product market fit", "unicorn",
         "y combinator", "accelerator", "pitch deck", "mvp", "lean startup"
     ],
-    "Scienza & Ricerca": [
+    "🔬 Scienza & Ricerca": [
         "science", "research", "physics", "chemistry", "biology", "medicine",
         "quantum computing", "quantum physics", "astronomy", "space", "nasa",
         "climate change", "renewable energy", "biotechnology", "genetics",
         "crispr", "vaccine", "drug discovery", "clinical trial", "peer review"
     ],
-    "Gaming & VR/AR": [
+    "🎮 Gaming & VR/AR": [
         "gaming", "video games", "game development", "unity", "unreal engine",
         "vr", "virtual reality", "ar", "augmented reality", "mr", "mixed reality",
         "metaverse", "oculus", "quest", "steamvr", "game design", "indie game",
         "aaa game", "mobile gaming", "esports"
     ],
-    "Hardware & IoT": [
+    "⚡ Hardware & IoT": [
         "hardware", "cpu", "gpu", "semiconductor", "chip", "processor",
         "raspberry pi", "arduino", "iot", "internet of things", "embedded",
         "fpga", "asic", "sensor", "robotics", "3d printing", "maker",
         "diy electronics", "pcb", "firmware"
     ],
-    "Crypto & Blockchain": [
+    "💰 Crypto & Blockchain": [
         "cryptocurrency", "bitcoin", "ethereum", "blockchain", "defi",
         "nft", "web3", "smart contract", "dao", "mining", "wallet",
         "exchange", "stablecoin", "altcoin", "consensus", "proof of work",
@@ -92,15 +94,13 @@ MACRO_TAGS = {
     ]
 }
 
-# --- HELPER FUNCTIONS ---
 
+# --- FUNZIONI OPERATIVE (da hn_analyzer_win, adattate cross-platform) ---
 def sanitize_filename(name):
-    """Removes characters that are illegal in filenames."""
     name = name.split('?')[0]
     return re.sub(r'[<>:"/\\|?*]', '_', name)
 
 def get_macro_tags(tags):
-    """Mappa i tag agli appropriati macro-tag."""
     macro_tags_found = set()
     if not isinstance(tags, list):
         return []
@@ -114,7 +114,6 @@ def get_macro_tags(tags):
     return list(macro_tags_found)
 
 def generate_audio(text, filename, title=""):
-    """Genera un file audio MP3 dal testo usando gTTS."""
     try:
         full_text = f"{title}. {text}" if title else text
         tts = gTTS(text=full_text, lang='it', slow=False)
@@ -126,7 +125,6 @@ def generate_audio(text, filename, title=""):
         return None
 
 def capture_screenshot(url, filename):
-    """Cattura uno screenshot del sito web e crea miniatura base64."""
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -143,7 +141,6 @@ def capture_screenshot(url, filename):
         return None, None
 
 def create_thumbnail_base64(image_path, max_width=300):
-    """Crea una miniatura dell'immagine e la converte in base64."""
     try:
         with Image.open(image_path) as img:
             width, height = img.size
@@ -164,14 +161,12 @@ def create_thumbnail_base64(image_path, max_width=300):
         return None
 
 def setup_environment():
-    """Prepara l'ambiente di lavoro creando le cartelle necessarie."""
     for directory in [OUTPUT_DIR, AUDIO_DIR, SCREENSHOT_DIR]:
         if not os.path.exists(directory):
             os.makedirs(directory)
     print(f"Ambiente configurato. Output in: {OUTPUT_DIR}, {AUDIO_DIR}, {SCREENSHOT_DIR}")
 
 def fetch_hackernews_feed(url="https://news.ycombinator.com/rss"):
-    """Recupera il feed RSS di Hacker News."""
     try:
         feed = feedparser.parse(url)
         print(f"Recuperati {len(feed.entries)} articoli dal feed di Hacker News")
@@ -181,7 +176,6 @@ def fetch_hackernews_feed(url="https://news.ycombinator.com/rss"):
         return []
 
 def extract_text_from_url(url):
-    """Estrae il contenuto testuale da una URL."""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=15)
@@ -193,82 +187,64 @@ def extract_text_from_url(url):
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = '\n'.join(chunk for chunk in chunks if chunk)
-        # Limita il testo a 8000 caratteri per rimanere sotto i limiti di contesto (es. 4096 token)
         return text[:8000]
     except Exception as e:
         return f"Errore nell'estrazione del testo: {str(e)}"
 
 def get_llm_config():
-    """Carica la configurazione LLM dal file o esegue la configurazione interattiva."""
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, 'r') as f:
             return json.load(f)
     return None
 
 def set_llm_config(config):
-    """Salva la configurazione LLM su file."""
     with open(SETTINGS_FILE, 'w') as f:
         json.dump(config, f, indent=4)
+
 def fetch_available_models(provider, api_url):
-    """Recupera i modelli disponibili dal servizio LLM."""
     try:
         if provider == "ollama":
-            # L'endpoint per i tag/modelli di Ollama è /api/tags
             check_url = urlparse(api_url)._replace(path="/api/tags").geturl()
             response = requests.get(check_url, timeout=10)
             response.raise_for_status()
             models = response.json().get('models', [])
             return [model['name'] for model in models]
-        
         elif provider == "lmstudio":
-            # L'endpoint per i modelli in stile OpenAI è /v1/models
             check_url = urlparse(api_url)._replace(path="/v1/models").geturl()
             response = requests.get(check_url, timeout=10)
             response.raise_for_status()
             models = response.json().get('data', [])
             return [model['id'] for model in models]
-            
     except requests.exceptions.RequestException as e:
         print(f"\nAvviso: Impossibile recuperare i modelli da {provider.upper()}. {e}")
     except Exception as e:
         print(f"\nAvviso: Errore imprevisto durante il recupero dei modelli: {e}")
-        
     return []
 
 def interactive_config(current_config=None):
-    """Guida l'utente nella configurazione interattiva dell'LLM."""
     print("--- Configurazione LLM Interattiva ---")
-    
-    # Provider
     default_provider = current_config.get('llm_provider', 'ollama') if current_config else 'ollama'
     provider = input(f"Scegli il provider [ollama/lmstudio] (default: {default_provider}): ").strip().lower() or default_provider
     while provider not in ['ollama', 'lmstudio']:
         print("Provider non valido.")
         provider = input("Scegli tra [ollama/lmstudio]: ").strip().lower()
-
-    # API URL
     default_urls = {
         'ollama': 'http://127.0.0.1:11434/api/generate',
         'lmstudio': 'http://127.0.0.1:1234/v1/chat/completions'
     }
     default_api_url = current_config.get('api_url', default_urls[provider]) if current_config else default_urls[provider]
     api_url = input(f"Inserisci l'URL dell'API (default: {default_api_url}): ").strip() or default_api_url
-
-    # Model Name (selezione dinamica)
     print("\nRecupero modelli disponibili...")
     available_models = fetch_available_models(provider, api_url)
     model_name = None
-
     if available_models:
         print("Modelli disponibili rilevati:")
         for i, model in enumerate(available_models):
             print(f"  {i + 1}: {model}")
-        
         last_model = current_config.get('model_name') if current_config else None
         default_choice = ""
         if last_model and last_model in available_models:
             default_choice = str(available_models.index(last_model) + 1)
-
         while not model_name:
             choice = input(f"Scegli un modello (numero) [default: {default_choice}]: ").strip() or default_choice
             try:
@@ -283,22 +259,16 @@ def interactive_config(current_config=None):
         print("Nessun modello rilevato automaticamente. Procedere con inserimento manuale.")
         default_model = current_config.get('model_name', 'gemma3:latest') if current_config else 'gemma3:latest'
         model_name = input(f"Inserisci il nome del modello (default: {default_model}): ").strip() or default_model
-
     config = {
         'llm_provider': provider,
         'api_url': api_url,
         'model_name': model_name
     }
-    
     set_llm_config(config)
     print("\nConfigurazione salvata.")
     return config
 
-# --- CORE LLM & ARTICLE PROCESSING ---
-
-
 def process_with_llm(text, url, api_url, provider, model_name):
-    """Processa il testo con un LLM locale per ottenere riassunto e tag in formato JSON."""
     prompt = f"""
     Analizza il seguente testo proveniente dall'URL: {url}
     TESTO:
@@ -317,10 +287,8 @@ def process_with_llm(text, url, api_url, provider, model_name):
 
     ATTENZIONE: La tua risposta deve iniziare con '{{' e finire con '}}' e contenere solo il JSON.
     """
-
     headers = {"Content-Type": "application/json"}
     payload = {}
-
     if provider == "ollama":
         payload = {
             "model": model_name,
@@ -335,29 +303,22 @@ def process_with_llm(text, url, api_url, provider, model_name):
             "temperature": 0.7,
             "stream": False
         }
-    
     try:
         response = requests.post(api_url, headers=headers, json=payload, timeout=180)
         response.raise_for_status()
-        
         result = response.json()
-        
         if provider == "ollama":
             raw_response = result.get('response', '')
         elif provider == "lmstudio":
             raw_response = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-
         if not raw_response.strip():
             print(f"\n[AVVISO] Risposta vuota ricevuta da '{provider}'. Salto articolo.")
             return None
-
         single_line_response = raw_response.replace('\n', ' ').replace('\r', '')
-        
         json_start = single_line_response.find('{')
         if json_start == -1:
             print(f"\n[AVVISO] Nessun oggetto JSON trovato nella risposta da '{provider}'.")
             return None
-
         open_braces = 0
         json_end = -1
         for i, char in enumerate(single_line_response[json_start:]):
@@ -368,40 +329,30 @@ def process_with_llm(text, url, api_url, provider, model_name):
             if open_braces == 0:
                 json_end = json_start + i + 1
                 break
-        
         if json_end == -1:
             print(f"\n[AVVISO] Nessun oggetto JSON completo trovato nella risposta da '{provider}'.")
             return None
-
         clean_json_str = single_line_response[json_start:json_end]
-        
         try:
             parsed_json = json.loads(clean_json_str)
         except json.JSONDecodeError:
             print(f"\n[AVVISO] Errore di decodifica JSON dalla risposta di '{provider}'. Risposta: {clean_json_str}")
             return None
-
         if not all(k in parsed_json for k in ["summary", "tags", "title"]):
             print(f"\n[AVVISO] JSON da '{provider}' è incompleto. Risposta: {clean_json_str}. Salto articolo.")
             return None
-            
         return parsed_json
-
     except requests.exceptions.RequestException as e:
-        # Questo è un errore fatale, il servizio LLM non è raggiungibile.
         print(f"\n[ERRORE FATALE] Errore di connessione o timeout con {provider.upper()}: {e}")
         print(f"Il processo di analisi verrà interrotto. Controlla che il servizio sia in esecuzione e non sovraccarico.")
         raise
     except Exception as e:
-        # Gestisce altri errori imprevisti senza bloccare tutto il processo.
         print(f"\n[ERRORE IMPREVISTO] in process_with_llm: {e}")
         return None
 
 def process_article(entry, api_url, llm_provider, model_name, generate_audio_flag=False):
-    """Processa un singolo articolo: estrae, analizza, salva."""
     original_title = entry.get('title', 'No Title')
     link = entry.get('link', '')
-    
     if 'news.ycombinator.com/item?id=' in link:
         hn_id_raw = urlparse(link).query.replace('id=', '')
         try:
@@ -410,33 +361,24 @@ def process_article(entry, api_url, llm_provider, model_name, generate_audio_fla
             title_span = soup.select_one('.titleline > a')
             if title_span and title_span.get('href'):
                 link = title_span['href']
-            else:
-                pass
         except Exception as e:
             print(f"Errore nel recupero del link esterno da {link}: {e}")
     else:
         hn_id_raw = link.split('/')[-1]
-
     hn_id = sanitize_filename(hn_id_raw)
     if not hn_id:
         hn_id = hashlib.md5(original_title.encode()).hexdigest()[:10]
-
     domain = urlparse(link).netloc
     text = extract_text_from_url(link)
-    
     if "Errore" in text:
         print(f'Salto articolo "{original_title}" a causa di un errore di estrazione: {text}')
         return None
-
     result = process_with_llm(text, link, api_url, llm_provider, model_name)
-    
     if result is None:
         print(f'Salto articolo "{original_title}" a causa di un errore di analisi LLM.')
         return None
-
     tags = result.get("tags", [])
     macro_tags = get_macro_tags(tags)
-    
     processed_article = {
         "hn_id": hn_id,
         "title": result.get("title", original_title),
@@ -448,14 +390,12 @@ def process_article(entry, api_url, llm_provider, model_name, generate_audio_fla
         "macro_tags": macro_tags,
         "main_link": result.get("main_link", "")
     }
-    
     if generate_audio_flag and processed_article["summary"]:
         safe_audio_name = f"{hn_id[:50]}.mp3"
         audio_path = generate_audio(processed_article["summary"], safe_audio_name, processed_article["title"])
         if audio_path:
             processed_article["audio_file"] = os.path.basename(audio_path)
             print(f"Audio generato: {processed_article['audio_file']}")
-
     if link and not any(d in domain for d in ['youtube.com', 'reddit.com', 'twitter.com']):
         safe_screenshot_name = f"{hn_id[:50]}.png"
         screenshot_path, thumbnail_base64 = capture_screenshot(link, safe_screenshot_name)
@@ -463,21 +403,16 @@ def process_article(entry, api_url, llm_provider, model_name, generate_audio_fla
             processed_article["screenshot_file"] = os.path.basename(screenshot_path)
             processed_article["thumbnail_base64"] = thumbnail_base64
             print(f"Screenshot catturato: {processed_article['screenshot_file']}")
-            
     filename = os.path.join(OUTPUT_DIR, f"{hn_id}.json")
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(processed_article, f, ensure_ascii=False, indent=2)
-    
     return processed_article
 
 def process_all_articles(entries, config, limit=None, generate_audio=False, workers=2):
-    """Processa tutti gli articoli con multithreading."""
     if limit:
         entries = entries[:limit]
-    
     results = []
     print(f"Analisi di {len(entries)} articoli in corso (max {workers} worker)... con {config['llm_provider']} su {config['api_url']} usando il modello {config['model_name']}")
-    
     with ThreadPoolExecutor(max_workers=workers) as executor:
         from functools import partial
         process_func = partial(process_article, 
@@ -485,9 +420,7 @@ def process_all_articles(entries, config, limit=None, generate_audio=False, work
                                llm_provider=config['llm_provider'],
                                model_name=config['model_name'],
                                generate_audio_flag=generate_audio)
-        
         future_to_entry = {executor.submit(process_func, entry): entry for entry in entries}
-        
         for future in tqdm(future_to_entry, total=len(entries)):
             entry = future_to_entry[future]
             original_title = entry.get('title', 'No Title')
@@ -496,33 +429,25 @@ def process_all_articles(entries, config, limit=None, generate_audio=False, work
                 if result:
                     results.append(result)
             except requests.exceptions.RequestException:
-                # Errore fatale di connessione, interrompe tutto.
                 print(f"\n[ERRORE FATALE] Rilevato errore di connessione in un worker. Arresto del processo.")
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
             except Exception as e:
-                # Altri errori non fatali, registra e continua.
                 print(f"\n[ERRORE WORKER] Errore durante l'analisi di '{original_title}': {e}. L'analisi continua.")
-
     with open(os.path.join(OUTPUT_DIR, "all_articles.json"), 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-    
     return results
 
-# --- HTML GENERATION & CLEANUP ---
-
 def generate_html(articles):
-    """Genera una pagina HTML con i risultati, includendo la funzionalità TTS."""
-    # Nuova versione: usa template HTML condiviso e aggiunge "Ascolta tutti"
     timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
     filename = os.path.join(OUTPUT_DIR, f"hn_analysis_{timestamp}.html")
     template_path = os.path.join(os.path.dirname(__file__), "hn_template.html")
     with open(template_path, "r", encoding="utf-8") as f:
         template = f.read()
-
     articles_html = ""
     all_summaries = []
     for i, article in enumerate(articles):
+        num = i + 1
         title = article.get("title", "Titolo non disponibile")
         link = article.get("link", "#")
         domain = article.get("domain", "")
@@ -534,33 +459,38 @@ def generate_html(articles):
         screenshot_file = article.get("screenshot_file", "")
         thumbnail_base64 = article.get("thumbnail_base64", "")
         article_id = f"article-{i}"
-        all_summaries.append(f"{title}. {summary}")
+        all_summaries.append(f"Articolo {num}. {title}. {summary}")
         screenshot_html = ""
-        if thumbnail_base64 and screenshot_file:
-            onclick_handler = f"openModal('{article_id}', '../{SCREENSHOT_DIR}/{screenshot_file}')"
+        if thumbnail_base64:
+            onclick_handler = f"openModal('{article_id}', '{thumbnail_base64}')"
             screenshot_html = f'<img src="{thumbnail_base64}" alt="Screenshot di {title}" class="screenshot-thumb" onclick="{onclick_handler}">'
         articles_html += f'''
         <article class="article" id="{article_id}">
-            <button class="audio-btn" onclick="speakText(document.querySelector('#{article_id} .summary').textContent, this)">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-                </svg>
-                Ascolta
-            </button>
-            <h2><a href="{link}" target="_blank">{title}</a></h2>
-            <div class="domain">{domain}</div>
-            {('<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>') if macro_tags else ''}
-            <div class="summary">{summary}</div>
-            <div class="tags">
-                {' '.join([f'<span class="tag">{tag}</span>' for tag in tags])}
+            <div class="article-content-wrapper">
+                <div class="article-image-col">
+                    {screenshot_html if screenshot_html else ''}
+                </div>
+                <div class="article-main-col">
+                    <div style="font-size:1.1em;font-weight:700;color:#8f5cff;margin-bottom:2px;">{num}</div>
+                    <button class="audio-btn" onclick="speakText(document.querySelector('#{article_id} .summary').textContent, this)">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                        </svg>
+                        Ascolta
+                    </button>
+                    <h2><a href="{link}" target="_blank">{title}</a></h2>
+                    <div class="domain">{domain}</div>
+                    {('<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>') if macro_tags else ''}
+                    <div class="summary">{summary}</div>
+                    <div class="tags">
+                        {' '.join([f'<span class="tag">{tag}</span>' for tag in tags])}
+                    </div>
+                    {f'<div class="main-link">Link principale: <a href="{main_link}" target="_blank">{main_link}</a></div>' if main_link else ''}
+                    {f'<a href="../{AUDIO_DIR}/{audio_file}" class="download-audio" download>📥 Scarica Audio MP3</a>' if audio_file else ''}
+                </div>
             </div>
-            {f'<div class="main-link">Link principale: <a href="{main_link}" target="_blank">{main_link}</a></div>' if main_link else ''}
-            {f'<a href="../{AUDIO_DIR}/{audio_file}" class="download-audio" download>📥 Scarica Audio MP3</a>' if audio_file else ''}
-            {screenshot_html}
         </article>
         '''
-
-    # Per compatibilità, nessun filtro tag: mostra "Tutti gli articoli"
     filter_info = "Tutti gli articoli"
     html_out = template.replace("{{date}}", time.strftime("%d/%m/%Y")) \
         .replace("{{filter_info}}", filter_info) \
@@ -568,14 +498,11 @@ def generate_html(articles):
         .replace("{{all_summaries}}", "\n---\n".join(all_summaries)) \
         .replace("{{datetime}}", time.strftime("%d/%m/%Y alle %H:%M:%S")) \
         .replace("{{num_articles}}", str(len(articles)))
-
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(html_out)
-
     return filename
 
 def cleanup_old_data(days_to_keep=7):
-    """Pulisce i vecchi dati più vecchi di N giorni."""
     now = datetime.now()
     cutoff = now - timedelta(days=days_to_keep)
     print(f"\nPulizia dei file più vecchi di {days_to_keep} giorni...")
@@ -593,10 +520,8 @@ def cleanup_old_data(days_to_keep=7):
                     print(f"Errore durante l'eliminazione di {file_path}: {e}")
 
 def check_llm_status(api_url, provider):
-    """Verifica se il servizio LLM è in esecuzione."""
     try:
         if provider == "ollama":
-            # L'URL per il check di Ollama è la radice
             check_url = urlparse(api_url)._replace(path="", query="", fragment="").geturl()
             print(f"Verifica dello stato di Ollama a: {check_url}...")
             response = requests.get(check_url, timeout=5)
@@ -607,8 +532,6 @@ def check_llm_status(api_url, provider):
                 print(f"\n[ERRORE] Ollama ha risposto ma potrebbe non essere operativo (Status: {response.status_code}).")
                 return False
         elif provider == "lmstudio":
-            # Per LM Studio, possiamo provare a fare una richiesta leggera, es. elenco modelli
-            # L'endpoint per i modelli è /v1/models
             check_url = urlparse(api_url)._replace(path="/v1/models").geturl()
             print(f"Verifica dello stato di LM Studio a: {check_url}...")
             response = requests.get(check_url, timeout=10)
@@ -618,23 +541,20 @@ def check_llm_status(api_url, provider):
             else:
                 print(f"\n[ERRORE] LM Studio ha risposto ma potrebbe non essere operativo (Status: {response.status_code}).")
                 return False
-
     except requests.exceptions.RequestException:
         print(f"\n[ERRORE] Impossibile connettersi a {provider.upper()} all'URL: {api_url}")
         print(f"Assicurati che il servizio sia in esecuzione e l'URL sia corretto.")
         return False
     return False
 
-# --- MAIN EXECUTION ---
-
+# --- MAIN ---
 def main():
     parser = argparse.ArgumentParser(description='Analizza il feed di Hacker News usando un LLM locale.')
     parser.add_argument('--limit', type=int, default=None, help='Numero massimo di articoli da analizzare.')
     parser.add_argument('--generate-audio', action='store_true', help='Genera file audio MP3 per i riassunti.')
-    parser.add_argument('--workers', type=int, default=1, help='Numero di worker paralleli per l\'analisi (default: 1). Aumentare con cautela.')
-    parser.add_argument('-o', '--configure', action='store_true', help='Forza la configurazione interattiva dell\'LLM.')
+    parser.add_argument('--workers', type=int, default=2, help='Numero di worker paralleli per l\'analisi (default: 2).')
+    parser.add_argument('--configure', action='store_true', help='Forza la configurazione interattiva dell\'LLM.')
     parser.add_argument('--cleanup', type=int, default=None, metavar='DAYS', help='Pulisce i dati più vecchi del numero di giorni specificato.')
-    
     args = parser.parse_args()
 
     config = get_llm_config()
@@ -674,7 +594,6 @@ def main():
 
     html_file = generate_html(articles)
     print(f"\nAnalisi completata! Generata la pagina HTML: {html_file}")
-    
     try:
         webbrowser.open(f"file://{os.path.abspath(html_file)}")
     except Exception as e:
