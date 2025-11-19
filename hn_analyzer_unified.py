@@ -471,22 +471,29 @@ def generate_html(articles):
                     {screenshot_html if screenshot_html else ''}
                 </div>
                 <div class="article-main-col">
-                    <div style="font-size:1.1em;font-weight:700;color:#8f5cff;margin-bottom:2px;">{num}</div>
-                    <button class="audio-btn" onclick="speakText(document.querySelector('#{article_id} .summary').textContent, this)">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-                        </svg>
-                        Ascolta
-                    </button>
-                    <h2><a href="{link}" target="_blank">{title}</a></h2>
-                    <div class="domain">{domain}</div>
-                    {('<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>') if macro_tags else ''}
-                    <div class="summary">{summary}</div>
-                    <div class="tags">
-                        {' '.join([f'<span class="tag">{tag}</span>' for tag in tags])}
+                    <div class="article-body">
+                        <div style="font-size:1.1em;font-weight:700;color:#8f5cff;margin-bottom:2px;">{num}</div>
+                        <h2><a href="{link}" target="_blank">{title}</a></h2>
+                        <div class="domain">{domain}</div>
+                        {('<div class="macro-tags">' + ' '.join([f'<span class="macro-tag">{mt}</span>' for mt in macro_tags]) + '</div>') if macro_tags else ''}
+                        <div class="summary">{summary}</div>
+                        <div class="tags">
+                            {' '.join([f'<span class="tag">{tag}</span>' for tag in tags])}
+                        </div>
+                        {f'<div class="main-link">Link principale: <a href="{main_link}" target="_blank">{main_link}</a></div>' if main_link else ''}
+                        {f'<a href="../{AUDIO_DIR}/{audio_file}" class="download-audio" download>📥 Scarica Audio MP3</a>' if audio_file else ''}
                     </div>
-                    {f'<div class="main-link">Link principale: <a href="{main_link}" target="_blank">{main_link}</a></div>' if main_link else ''}
-                    {f'<a href="../{AUDIO_DIR}/{audio_file}" class="download-audio" download>📥 Scarica Audio MP3</a>' if audio_file else ''}
+                    <div class="article-actions">
+                        <div class="audio-controls">
+                            <button class="audio-btn" onclick="speakText(document.querySelector('#{article_id} .summary').textContent, this)">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                                Ascolta
+                            </button>
+                            <button class="audio-btn-play-from" onclick="playFromIndex({i})">
+                                ▶️ Da qui
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </article>
