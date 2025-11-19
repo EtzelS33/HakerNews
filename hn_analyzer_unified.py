@@ -577,6 +577,30 @@ def main():
         cleanup_old_data(days_to_keep=args.cleanup)
         sys.exit(0)
 
+    # Controlla se esiste un report recente
+    latest_report_path = None
+    if os.path.exists(OUTPUT_DIR):
+        list_of_reports = glob.glob(os.path.join(OUTPUT_DIR, 'hn_analysis_*.html'))
+        if list_of_reports:
+            latest_report_path = max(list_of_reports, key=os.path.getmtime)
+
+    if latest_report_path:
+        report_time = datetime.fromtimestamp(os.path.getmtime(latest_report_path))
+        if datetime.now() - report_time < timedelta(hours=6):
+            print(f"\nL'ultimo report generato ({os.path.basename(latest_report_path)}) ha meno di 6 ore.")
+            choice = ""
+            while choice not in ['a', 'n']:
+                choice = input("Vuoi aprirlo [a] o generarne uno nuovo [n]? ").lower().strip()
+            
+            if choice == 'a':
+                print(f"Apertura del report esistente: {latest_report_path}")
+                try:
+                    webbrowser.open(f"file://{os.path.abspath(latest_report_path)}")
+                except Exception as e:
+                    print(f"Impossibile aprire il browser automaticamente: {e}")
+                    print(f"Apri manualmente il file: {os.path.abspath(latest_report_path)}")
+                sys.exit(0)
+
     entries = fetch_hackernews_feed()
     if not entries:
         print("Nessun articolo trovato. Uscita.")
